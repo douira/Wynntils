@@ -8,9 +8,12 @@ import com.wynntils.core.framework.rendering.SmartFontRenderer;
 import com.wynntils.core.framework.settings.annotations.Setting;
 import com.wynntils.core.framework.settings.annotations.SettingsInfo;
 import com.wynntils.core.framework.settings.instances.SettingsClass;
+import com.wynntils.core.framework.settings.ui.SettingsUI;
+import com.wynntils.core.utils.Utils;
 import com.wynntils.modules.core.enums.OverlayRotation;
 import com.wynntils.modules.utilities.overlays.hud.TerritoryFeedOverlay;
 import com.wynntils.webapi.WebManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.util.text.TextFormatting;
 
 @SettingsInfo(name = "overlays", displayPath = "Overlays")
@@ -31,11 +34,11 @@ public class OverlayConfig extends SettingsClass {
     public static class Health extends SettingsClass {
         public static Health INSTANCE;
 
-        @Setting(displayName = "Health Bar Width", description = "How wide the Health Bar is in pixels (Adjusted using Minecraft's scaling)")
+        @Setting(displayName = "Health Bar Width", description = "How wide should the health bar be in pixels?\n\n§8This will be adjusted using Minecraft's scaling.")
         @Setting.Limitations.IntLimit(min = 0, max = 81)
         public int width = 81;
 
-        @Setting(displayName = "Rotation Health Bar", description = "This is the rotation of the Health Bar in degrees. (Accompanied text will be removed)")
+        @Setting(displayName = "Health Bar Orientation", description = "How orientated in degrees should the health bar be?\n\n§8Accompanied text will be removed.")
         public OverlayRotation overlayRotation = OverlayRotation.NORMAL;
 
         @Setting(displayName = "Low Health Vignette", description = "Should a red vignette be displayed when you're low on health?")
@@ -74,21 +77,20 @@ public class OverlayConfig extends SettingsClass {
             b,
             c,
             d
-            //following the format, to add more textures, register them here with a name and create a special case in the render method
+            // following the format, to add more textures, register them here with a name and create a special case in the render method
         }
 
     }
-
 
     @SettingsInfo(name = "mana_settings", displayPath = "Overlays/Mana")
     public static class Mana extends SettingsClass {
         public static Mana INSTANCE;
 
-        @Setting(displayName = "Mana Bar Width", description = "How wide the Mana Bar is in pixels (Adjusted using Minecraft's scaling)")
+        @Setting(displayName = "Mana Bar Width", description = "How wide should the mana bar be in pixels?\n\n§8This will be adjusted using Minecraft's scaling.")
         @Setting.Limitations.IntLimit(min = 0, max = 81)
         public int width = 81;
 
-        @Setting(displayName = "Rotation Mana Bar", description = "This is the rotation of the Mana Bar in degrees. (Accompanied text will be removed)")
+        @Setting(displayName = "Mana Bar Orientation", description = "How orientated in degrees should the mana bar be?\n\n§8Accompanied text will be removed.")
         public OverlayRotation overlayRotation = OverlayRotation.NORMAL;
 
         @Setting(displayName = "Mana Texture", description = "What texture should be used for the mana bar?")
@@ -113,7 +115,7 @@ public class OverlayConfig extends SettingsClass {
             b,
             c,
             d
-            //following the format, to add more textures, register them here with a name and create a special case in the render method
+            // following the format, to add more textures, register them here with a name and create a special case in the render method
         }
 
     }
@@ -176,7 +178,7 @@ public class OverlayConfig extends SettingsClass {
             a,
             b,
             c
-            //following the format, to add more textures, register them here with a name and create a special case in the render method
+            // following the format, to add more textures, register them here with a name and create a special case in the render method
         }
 
     }
@@ -207,7 +209,6 @@ public class OverlayConfig extends SettingsClass {
             c
         }
     }
-
 
     @SettingsInfo(name = "leveling_settings", displayPath = "Overlays/Leveling")
     public static class Leveling extends SettingsClass {
@@ -359,11 +360,11 @@ public class OverlayConfig extends SettingsClass {
             public String musicChangeFormat = TextFormatting.GRAY + "♫ %np%";
         }
     }
-    
+
     @SettingsInfo(name = "war_timer_settings", displayPath = "Overlays/War Timer")
     public static class WarTimer extends SettingsClass {
         public static WarTimer INSTANCE;
-        
+
         @Setting(displayName = "Text Shadow", description = "What should the text shadow look like?")
         public SmartFontRenderer.TextShadow textShadow = SmartFontRenderer.TextShadow.OUTLINE;
     }
@@ -372,7 +373,7 @@ public class OverlayConfig extends SettingsClass {
     public static class TerritoryFeed extends SettingsClass {
         public static TerritoryFeed INSTANCE;
 
-        @Setting(displayName = "Territory Feed" ,description = "Should the territory feed be displayed?", order = 0)
+        @Setting(displayName = "Territory Feed", description = "Should the territory feed be displayed?", order = 0)
         public boolean enabled = true;
 
         @Setting(displayName = "Animation Length", description = "How long (in seconds) should messages on the territory feed be displayed?")
@@ -404,5 +405,87 @@ public class OverlayConfig extends SettingsClass {
             DISTINGUISH_OWN_GUILD,
             ONLY_OWN_GUILD
         }
+    }
+
+    @SettingsInfo(name = "info_overlays_settings", displayPath = "Overlays/Info")
+    public static class InfoOverlays extends SettingsClass {
+        public static InfoOverlays INSTANCE;
+
+        @Setting.Features.StringParameters(parameters = {"x", "y", "z", "dir", "fps", "class", "lvl"})
+        @Setting(displayName = "Info 1 text", description = "What should the first box display?", order = 1)
+        @Setting.Limitations.StringLimit(maxLength = 200)
+        public String info1Format = "";
+
+        @Setting.Features.StringParameters(parameters = {"x", "y", "z", "dir", "fps", "class", "lvl"})
+        @Setting(displayName = "Info 2 text", description = "What should the second box display?", order = 2)
+        @Setting.Limitations.StringLimit(maxLength = 200)
+        public String info2Format = "";
+
+        @Setting.Features.StringParameters(parameters = {"x", "y", "z", "dir", "fps", "class", "lvl"})
+        @Setting(displayName = "Info 3 text", description = "What should the third box display?", order = 3)
+        @Setting.Limitations.StringLimit(maxLength = 200)
+        public String info3Format = "";
+
+        @Setting.Features.StringParameters(parameters = {"x", "y", "z", "dir", "fps", "class", "lvl"})
+        @Setting(displayName = "Info 4 text", description = "What should the fourth box display?", order = 4)
+        @Setting.Limitations.StringLimit(maxLength = 200)
+        public String info4Format = "";
+
+        @Setting(displayName = "Presets", description = "Copies various formats to the clipboard (Paste to one of the fields above)", upload = false, order = 5)
+        public Presets preset = Presets.CLICK_ME;
+
+        @Setting(displayName = "Background Opacity", description = "How dark should the background box be (% opacity)?", order = 6)
+        @Setting.Limitations.IntLimit(min = 0, max = 100)
+        public int opacity = 0;
+
+        @Setting(displayName = "Text Shadow", description = "What should the text shadow look like?")
+        public SmartFontRenderer.TextShadow textShadow = SmartFontRenderer.TextShadow.OUTLINE;
+
+        @Override
+        public void onSettingChanged(String name) {
+            if ("preset".equals(name)) {
+                if (!(Minecraft.getMinecraft().currentScreen instanceof SettingsUI)) {
+                    preset = Presets.CLICK_ME;
+                } else if (preset.value != null) {
+                    Utils.copyToClipboard(preset.value);
+                }
+            }
+        }
+
+        public enum Presets {
+            CLICK_ME("Click me to copy to clipboard", null),
+            COORDS("Coordinates", "%x% %z% (%y%)"),
+            ACTIONBAR_COORDS("Actionbar Coordinates", "&7%x% &a%dir% &7%z%"),
+            FPS("FPS Counter", "FPS: %fps%"),
+            CLASS("Class", "%Class%\\nLevel %lvl%"),
+            LOCATION("Location", "[%world%] %location%"),
+            BALANCE("Balance", "%le%\\L\\E %blocks%\\E\\B %emeralds%\\E (%money%\\E)"),
+            UNPROCESSED_MATERIALS("Unprocessed Materials", "Unprocessed materials: %unprocessed% / %unprocessed_max%"),
+            MEMORY_USAGE("Memory usage", "%mem_pct%\\% %mem_used%/%mem_max%MB"),
+            PING("Ping", "%ping%ms/15s"),
+            BLOCKSPERSECOND("Blocks Per Second", "%bps% bps"),
+            BLOCKSPERMINUTE("Blocks Per Minute", "%bpm% bpm");
+
+            public final String displayName;
+            public final String value;
+
+            Presets(String displayName, String value) {
+                this.displayName = displayName;
+                this.value = value;
+            }
+        }
+    }
+
+    @SettingsInfo(name = "player_info_settings", displayPath = "Overlays/Player Info")
+    public static class PlayerInfo extends SettingsClass {
+        public static PlayerInfo INSTANCE;
+
+        @Setting(displayName = "Replace Vanilla Player List", description = "Should the vanilla player list be replaced with Wynntils' custom list?", order = 1)
+        public boolean replaceVanilla = true;
+
+        @Setting(displayName = "Player List Transparency", description = "How transparent should the custom player list be?", order = 2)
+        @Setting.Limitations.FloatLimit(min = .0f, max = 1f)
+        public float backgroundAlpha = 0.3f;
+
     }
 }

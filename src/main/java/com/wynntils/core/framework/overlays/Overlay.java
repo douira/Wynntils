@@ -6,17 +6,19 @@ package com.wynntils.core.framework.overlays;
 
 import com.wynntils.core.framework.FrameworkManager;
 import com.wynntils.core.framework.instances.Module;
-import com.wynntils.core.framework.instances.containers.ModuleContainer;
 import com.wynntils.core.framework.instances.PlayerInfo;
+import com.wynntils.core.framework.instances.containers.ModuleContainer;
 import com.wynntils.core.framework.rendering.ScreenRenderer;
+import com.wynntils.core.framework.settings.annotations.Setting;
 import com.wynntils.core.framework.settings.instances.SettingsHolder;
-import com.wynntils.core.utils.Position;
+import com.wynntils.core.utils.objects.Position;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 
 import java.awt.Point;
 
 public abstract class Overlay extends ScreenRenderer implements SettingsHolder {
+
     public transient ModuleContainer module = null;
     public transient String displayName;
     public transient Point staticSize;
@@ -24,12 +26,14 @@ public abstract class Overlay extends ScreenRenderer implements SettingsHolder {
     public transient OverlayGrowFrom growth;
     public transient RenderGameOverlayEvent.ElementType[] overrideElements;
 
+    @Setting
     public boolean active = true;
+    @Setting
     public Position position = new Position();
 
     public Overlay(String displayName, int sizeX, int sizeY, boolean visible, float anchorX, float anchorY, int offsetX, int offsetY, OverlayGrowFrom growth, RenderGameOverlayEvent.ElementType... overrideElements) {
         this.displayName = displayName;
-        this.staticSize = new Point(sizeX,sizeY);
+        this.staticSize = new Point(sizeX, sizeY);
         this.visible = visible;
         this.overrideElements = overrideElements;
         this.position.anchorX = anchorX;
@@ -40,9 +44,9 @@ public abstract class Overlay extends ScreenRenderer implements SettingsHolder {
         this.position.refresh(screen);
     }
 
-    public void render(RenderGameOverlayEvent.Pre event){}
-    public void render(RenderGameOverlayEvent.Post event){}
-    public void tick(TickEvent.ClientTickEvent event, long ticks){}
+    public void render(RenderGameOverlayEvent.Pre event) {}
+    public void render(RenderGameOverlayEvent.Post event) {}
+    public void tick(TickEvent.ClientTickEvent event, long ticks) {}
 
     public PlayerInfo getPlayerInfo() {
         return PlayerInfo.getPlayerInfo();

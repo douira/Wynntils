@@ -8,12 +8,11 @@ import com.wynntils.Reference;
 import com.wynntils.core.framework.overlays.Overlay;
 import com.wynntils.core.framework.rendering.SmartFontRenderer;
 import com.wynntils.core.framework.rendering.colors.CommonColors;
-import com.wynntils.core.framework.rendering.textures.AssetsTexture;
 import com.wynntils.core.framework.rendering.textures.Textures;
-import com.wynntils.modules.core.managers.CompassManager;
 import com.wynntils.modules.map.MapModule;
 import com.wynntils.modules.map.configs.MapConfig;
 import com.wynntils.modules.map.instances.MapProfile;
+import com.wynntils.modules.map.overlays.objects.MapCompassIcon;
 import com.wynntils.modules.map.overlays.objects.MapIcon;
 import net.minecraft.client.renderer.BufferBuilder;
 import net.minecraft.client.renderer.GlStateManager;
@@ -32,31 +31,44 @@ public class MiniMapOverlay extends Overlay {
         super("Mini Map", 100, 100, true, 0, 0, 10, 10, OverlayGrowFrom.TOP_LEFT);
     }
 
-    private static int zoom = 100;
+    private static final int MAX_ZOOM = 100;  // Note that this is the most zoomed out
+    private static final int MIN_ZOOM = -10;  // And this is the most zoomed in
+    private static final double ZOOM_SCALE_FACTOR = 1.05;
+
+    public static void zoomBy(int by) {
+        double zoomScale = Math.pow(ZOOM_SCALE_FACTOR, -by);
+        int currentZoom = MapConfig.INSTANCE.mapZoom;
+        float halfMapSize = MapConfig.INSTANCE.mapSize / 2f;
+
+        MapConfig.INSTANCE.mapZoom = MathHelper.clamp((int) Math.round((zoomScale * (currentZoom + halfMapSize) - halfMapSize)), MIN_ZOOM, MAX_ZOOM);
+        if (MapConfig.INSTANCE.mapZoom != currentZoom) {
+            MapConfig.INSTANCE.saveSettings(MapModule.getModule());
+        }
+    }
 
     @Override
     public void render(RenderGameOverlayEvent.Pre e) {
-        if(!Reference.onWorld || e.getType() != RenderGameOverlayEvent.ElementType.ALL || !MapConfig.INSTANCE.enabled) return;
-        if(!MapModule.getModule().getMainMap().isReadyToUse()) return;
+        if (!Reference.onWorld || e.getType() != RenderGameOverlayEvent.ElementType.ALL || !MapConfig.INSTANCE.enabled) return;
+        if (!MapModule.getModule().getMainMap().isReadyToUse()) return;
 
         MapProfile map = MapModule.getModule().getMainMap();
 
-        //calculates the extra size to avoid rotation overpass
+        // calculates the extra size to avoid rotation overpass
         float extraFactor = 1;
         if (MapConfig.INSTANCE.followPlayerRotation && MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.SQUARE) extraFactor = 1.5f;
 
-        //updates the map size
+        // updates the map size
         int mapSize = MapConfig.INSTANCE.mapSize;
         staticSize = new Point(mapSize, mapSize);
 
-        zoom = MapConfig.INSTANCE.mapZoom;
+        int zoom = MapConfig.INSTANCE.mapZoom;
 
-        //texture position
-        float minX = map.getTextureXPosition(mc.player.posX) - extraFactor * (mapSize/2f + zoom); // <--- min texture x point
-        float minZ = map.getTextureZPosition(mc.player.posZ) - extraFactor * (mapSize/2f + zoom); // <--- min texture z point
+        // texture position
+        float minX = map.getTextureXPosition(mc.player.posX) - extraFactor * (mapSize/2f + zoom);  // <--- min texture x point
+        float minZ = map.getTextureZPosition(mc.player.posZ) - extraFactor * (mapSize/2f + zoom);  // <--- min texture z point
 
-        float maxX = map.getTextureXPosition(mc.player.posX) + extraFactor * (mapSize/2f + zoom); // <--- max texture x point
-        float maxZ = map.getTextureZPosition(mc.player.posZ) + extraFactor * (mapSize/2f + zoom); // <--- max texture z point
+        float maxX = map.getTextureXPosition(mc.player.posX) + extraFactor * (mapSize/2f + zoom);  // <--- max texture x point
+        float maxZ = map.getTextureZPosition(mc.player.posZ) + extraFactor * (mapSize/2f + zoom);  // <--- max texture z point
 
         minX /= (float)map.getImageWidth(); maxX /= (float)map.getImageWidth();
         minZ /= (float)map.getImageHeight(); maxZ /= (float)map.getImageHeight();
@@ -64,32 +76,35 @@ public class MiniMapOverlay extends Overlay {
         float centerX = minX + ((maxX - minX)/2);
         float centerZ = minZ + ((maxZ - minZ)/2);
 
-        if(centerX > 1 || centerX < 0 || centerZ > 1 || centerZ < 0) return;
+        if (centerX > 1 || centerX < 0 || centerZ > 1 || centerZ < 0) return;
 
         try{
             GlStateManager.enableAlpha();
             GlStateManager.enableTexture2D();
 
-            //textures & masks
-            if(MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.CIRCLE) {
+            // textures & masks
+            if (MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.CIRCLE) {
                 createMask(Textures.Masks.circle, 0, 0, mapSize, mapSize);
-            }else{
+            } else {
                 createMask(Textures.Masks.full, 0, 0, mapSize, mapSize);
             }
 
-            //map texture
+            // map texture
             map.bindTexture();
             GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
 
-            //rotation axis
+            // rotation axis
             transformationOrigin(mapSize/2, mapSize/2);
-            if(MapConfig.INSTANCE.followPlayerRotation) rotate(180 - MathHelper.fastFloor(mc.player.rotationYaw));
+            if (MapConfig.INSTANCE.followPlayerRotation) rotate(180 - MathHelper.fastFloor(mc.player.rotationYaw));
 
-            //map quad
+            // map quad
             float extraSize = (extraFactor - 1f) * mapSize/2f;  // How many extra pixels multiplying by extraFactor added on each side
-            GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+
+            int option = MapConfig.INSTANCE.renderUsingLinear ? GL11.GL_LINEAR : GL11.GL_NEAREST;
+            GlStateManager.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, option);
 
             GlStateManager.enableBlend();
+            GlStateManager.enableTexture2D();
             Tessellator tessellator = Tessellator.getInstance();
             BufferBuilder bufferbuilder = tessellator.getBuffer();
             {
@@ -99,6 +114,7 @@ public class MiniMapOverlay extends Overlay {
                 bufferbuilder.pos(position.getDrawingX() + mapSize + extraSize, position.getDrawingY() + mapSize + extraSize, 0).tex(maxX, maxZ).endVertex();
                 bufferbuilder.pos(position.getDrawingX() + mapSize + extraSize, position.getDrawingY() - extraSize, 0).tex(maxX, minZ).endVertex();
                 bufferbuilder.pos(position.getDrawingX() - extraSize, position.getDrawingY() - extraSize, 0).tex(minX, minZ).endVertex();
+
                 tessellator.draw();
             }
 
@@ -109,8 +125,11 @@ public class MiniMapOverlay extends Overlay {
             if (MapConfig.INSTANCE.minimapIcons) {
                 final float halfMapSize = mapSize / 2f;
                 final float scaleFactor = mapSize / (mapSize + 2f * zoom);
+
+                // TODO this needs to scale in even numbers to avoid distortion!
                 final float sizeMultiplier = 0.8f * MapConfig.INSTANCE.minimapIconSizeMultiplier * (1 - (1 - scaleFactor) * (1 - scaleFactor));
-                final double rotationRadians = mc.player.rotationYaw * Math.PI / 180;
+
+                final double rotationRadians = Math.toRadians(mc.player.rotationYaw);
                 final float sinRotationRadians = (float) Math.sin(rotationRadians);
                 final float cosRotationRadians = (float) -Math.cos(rotationRadians);
 
@@ -123,36 +142,51 @@ public class MiniMapOverlay extends Overlay {
                 final int maxFastWorldZ = (int) (mc.player.posZ + extraFactor * (mapSize/2f + zoom)) + 1;
 
                 Consumer<MapIcon> consumer = c -> {
+                    if (!c.isEnabled(true)) return;
                     int posX = c.getPosX();
                     int posZ = c.getPosZ();
                     float sizeX = c.getSizeX();
                     float sizeZ = c.getSizeZ();
                     if (
-                            c.isEnabled() &&
-                            !(minFastWorldX <= posX + sizeX && posX - sizeX <= maxFastWorldX) ||
-                            !(minFastWorldZ <= posZ + sizeZ && posZ - sizeZ <= maxFastWorldZ)
+                        !(minFastWorldX <= posX + sizeX && posX - sizeX <= maxFastWorldX) ||
+                        !(minFastWorldZ <= posZ + sizeZ && posZ - sizeZ <= maxFastWorldZ)
                     ) {
                         return;
                     }
                     float dx = (float) (posX - mc.player.posX) * scaleFactor;
                     float dz = (float) (posZ - mc.player.posZ) * scaleFactor;
 
+                    boolean followRotation = false;
+
                     if (MapConfig.INSTANCE.followPlayerRotation) {
                         // Rotate dx and dz
-                        float temp = dx * cosRotationRadians - dz * sinRotationRadians;
-                        dz = dx * sinRotationRadians + dz * cosRotationRadians;
-                        dx = temp;
+                        if (followRotation = c.followRotation()) {
+                            GlStateManager.pushMatrix();
+                            Point drawingOrigin = MiniMapOverlay.drawingOrigin();
+                            GlStateManager.translate(drawingOrigin.x + halfMapSize, drawingOrigin.y + halfMapSize, 0);
+                            GlStateManager.rotate(180 - mc.player.rotationYaw, 0, 0, 1);
+                            GlStateManager.translate(-drawingOrigin.x - halfMapSize, -drawingOrigin.y - halfMapSize, 0);
+                        } else {
+                            float temp = dx * cosRotationRadians - dz * sinRotationRadians;
+                            dz = dx * sinRotationRadians + dz * cosRotationRadians;
+                            dx = temp;
+                        }
                     }
 
-                    c.renderAt(this, dx + halfMapSize, dz + halfMapSize, sizeMultiplier);
+                    c.renderAt(this, dx + halfMapSize, dz + halfMapSize, sizeMultiplier, scaleFactor);
+                    if (followRotation) {
+                        GlStateManager.popMatrix();
+                    }
                 };
 
                 MapIcon.getApiMarkers(MapConfig.INSTANCE.iconTexture).forEach(consumer);
                 MapIcon.getWaypoints().forEach(consumer);
+                MapIcon.getPathWaypoints().forEach(consumer);
+                MapIcon.getPlayers().forEach(consumer);
 
-                if (CompassManager.getCompassLocation() != null) {
-                    MapIcon compassIcon = MapIcon.getCompass();
+                MapIcon compassIcon = MapIcon.getCompass();
 
+                if (compassIcon.isEnabled(true)) {
                     float dx = (float) (compassIcon.getPosX() - mc.player.posX) * scaleFactor;
                     float dz = (float) (compassIcon.getPosZ() - mc.player.posZ) * scaleFactor;
 
@@ -166,61 +200,52 @@ public class MiniMapOverlay extends Overlay {
                     float newDx = 0;
                     float newDz = 0;
                     final float compassSize = Math.max(compassIcon.getSizeX(), compassIcon.getSizeZ()) * 0.8f * MapConfig.INSTANCE.minimapIconSizeMultiplier;
+                    boolean rendering = true;
 
-                    if (MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.SQUARE) {
-                        newDx = Math.max(-halfMapSize + compassSize, Math.min(halfMapSize - compassSize, dx));
-                        newDz = Math.max(-halfMapSize + compassSize, Math.min(halfMapSize - compassSize, dz));
-                        scaled = (newDx != dx) || (newDz != dz);
-                        if (!scaled) {
-                            dx = newDx;
-                            dz = newDz;
+                    float distanceSq = dx * dx + dz * dz;
+                    float maxDistance = halfMapSize - compassSize;
+
+                    if (distanceSq > 16000000f) {
+                        rendering = false;
+                    } if (MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.SQUARE) {
+                        if (!(
+                                -maxDistance <= dx && dx <= maxDistance &&
+                                -maxDistance <= dz && dz <= maxDistance
+                        )) {
+                            // Scale them in so that `|newDx| <= maxDistance && |newDz| <= maxDistance`
+                            scaled = true;
+                            float scale = maxDistance / Math.max(Math.abs(dx), Math.abs(dz));
+                            newDx = dx * scale;
+                            newDz = dz * scale;
                         }
                     } else {
-                        float distance_sq = dx * dx + dz * dz;
-                        float max_distance = halfMapSize - compassSize;
-                        if (distance_sq > max_distance * max_distance) {
+                        if (distanceSq > maxDistance * maxDistance) {
                             // Scale it down back into the circle
-                            float multiplier = max_distance / (float) Math.sqrt(distance_sq);
+                            float multiplier = maxDistance / (float) Math.sqrt(distanceSq);
                             newDx = dx * multiplier;
                             newDz = dz * multiplier;
                             scaled = true;
                         }
                     }
 
-                    if (scaled) {
-                        float angle = (float) (Math.atan2(dz, dx) * 180f / Math.PI) + 90f;
+                    if (rendering && scaled) {
+                        float angle = (float) Math.toDegrees(Math.atan2(dz, dx)) + 90f;
 
                         dx = newDx + halfMapSize;
                         dz = newDz + halfMapSize;
-
-                        final AssetsTexture pointerTexture = Textures.Map.map_icons;
-                        final int pointerSizeX = 5;
-                        final int pointerSizeZ = 4;
-                        final int pointerTexPosX = 14;
-                        final int pointerTexPosZ = 53;
-                        final int pointerTexSizeX = 24;
-                        final int pointerTexSizeZ = 61;
 
                         Point drawingOrigin = MiniMapOverlay.drawingOrigin();
 
                         GlStateManager.pushMatrix();
                         GlStateManager.translate(drawingOrigin.x + dx, drawingOrigin.y + dz, 0);
-                        GlStateManager.rotate(angle,0,0,1);
+                        GlStateManager.rotate(angle, 0, 0, 1);
                         GlStateManager.translate(-drawingOrigin.x - dx, -drawingOrigin.y - dz, 0);
 
-                        drawRectF(
-                                pointerTexture,
-                                dx - pointerSizeX * sizeMultiplier,
-                                dz - pointerSizeZ * sizeMultiplier,
-                                dx + pointerSizeX * sizeMultiplier,
-                                dz + pointerSizeZ * sizeMultiplier,
-                                pointerTexPosX, pointerTexPosZ,
-                                pointerTexSizeX, pointerTexSizeZ
-                        );
+                        MapCompassIcon.pointer.renderAt(this, dx, dz, sizeMultiplier, 1f);
 
                         GlStateManager.popMatrix();
-                    } else {
-                        compassIcon.renderAt(this, dx + halfMapSize, dz + halfMapSize, sizeMultiplier);
+                    } else if (rendering) {
+                        compassIcon.renderAt(this, dx + halfMapSize, dz + halfMapSize, sizeMultiplier, scaleFactor);
                     }
                 }
             }
@@ -229,14 +254,15 @@ public class MiniMapOverlay extends Overlay {
             GlStateManager.disableBlend();
             clearMask();
 
-            if(MapConfig.INSTANCE.followPlayerRotation) rotate(180 - MathHelper.fastFloor(mc.player.rotationYaw));
+            if (MapConfig.INSTANCE.followPlayerRotation) rotate(180 - MathHelper.fastFloor(mc.player.rotationYaw));
 
-            //cursor & cursor rotation
+            // cursor & cursor rotation
             rotate(180 + MathHelper.fastFloor(mc.player.rotationYaw));
 
             MapConfig.PointerType type = MapConfig.Textures.INSTANCE.pointerStyle;
 
             MapConfig.Textures.INSTANCE.pointerColor.applyColor();
+            GlStateManager.enableAlpha();
             drawRectF(Textures.Map.map_pointers, (mapSize/2f) - type.dWidth, (mapSize/2f) - type.dHeight, (mapSize/2f) + type.dWidth, (mapSize/2f) + type.dHeight, 0, type.yStart, type.width, type.yStart + type.height);
             GlStateManager.color(1, 1, 1, 1);
 
@@ -253,59 +279,31 @@ public class MiniMapOverlay extends Overlay {
             } else if (MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.CIRCLE) {
                 if (MapConfig.Textures.INSTANCE.textureType == MapConfig.TextureType.Paper) {
                     drawRect(Textures.Map.paper_map_textures, -3, -3, mapSize + 3, mapSize + 3, 217, 217, 434, 438);
-                } else if(MapConfig.Textures.INSTANCE.textureType == MapConfig.TextureType.Wynn) {
-                    //todo texture
+                } else if (MapConfig.Textures.INSTANCE.textureType == MapConfig.TextureType.Wynn) {
+                    // todo texture
                 } else if (MapConfig.Textures.INSTANCE.textureType == MapConfig.TextureType.Gilded) {
                     drawRect(Textures.Map.gilded_map_textures, -1, -1, mapSize+1, mapSize+1, 0, 0, 262, 262);
                 }
             }
 
             // Direction Text
-            // TODO: Optimise
             if (MapConfig.INSTANCE.showCompass) {
                 if (MapConfig.INSTANCE.followPlayerRotation) {
                     float mapCentre = (float) mapSize / 2f;
-                    float mapCentreSquare = mapCentre * MathHelper.SQRT_2;
-                    if (MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.CIRCLE) {
-                        drawString("N", mapCentre - 2 + mapCentre * MathHelper.cos((float) (Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw)) - (Math.PI / 2))), mapCentre - 3 + mapCentre * MathHelper.sin((float) (Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw)) - (Math.PI / 2))), CommonColors.WHITE);
-                        if (!MapConfig.INSTANCE.northOnly) {
-                            drawString("E", mapCentre - 2 + mapCentre * MathHelper.cos((float) Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw))), mapCentre - 3 + mapCentre * MathHelper.sin((float) Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw))), CommonColors.WHITE);
-                            drawString("S", mapCentre - 2 + mapCentre * MathHelper.cos((float) (Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw)) + (Math.PI / 2))), mapCentre - 3 + mapCentre * MathHelper.sin((float) (Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw)) + (Math.PI / 2))), CommonColors.WHITE);
-                            drawString("W", mapCentre - 2 + mapCentre * MathHelper.cos((float) (Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw)) + Math.PI)), mapCentre - 3 + mapCentre * MathHelper.sin((float) (Math.toRadians(180 - MathHelper.fastFloor(mc.player.rotationYaw)) + Math.PI)), CommonColors.WHITE);
-                        }
-                    } else {
-                        int limitedDeg = (180 - MathHelper.fastFloor(mc.player.rotationYaw)) % 360;
-                        if (limitedDeg < 0)
-                            limitedDeg += 360;
-                        if (limitedDeg <= 45 || limitedDeg > 315) {
-                            drawString("N", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) (Math.toRadians(limitedDeg) - (Math.PI / 2))), -3, CommonColors.WHITE);
-                            if (!MapConfig.INSTANCE.northOnly) {
-                                drawString("E", mapSize - 2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) Math.toRadians(limitedDeg)), CommonColors.WHITE);
-                                drawString("S", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) (Math.toRadians(limitedDeg) + (Math.PI / 2))), mapSize - 3, CommonColors.WHITE);
-                                drawString("W", -2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) (Math.toRadians(limitedDeg) + Math.PI)), CommonColors.WHITE);
-                            }
-                        } else if (limitedDeg <= 135) {
-                            drawString("N", mapSize - 2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) (Math.toRadians(limitedDeg) - (Math.PI / 2))), CommonColors.WHITE);
-                            if (!MapConfig.INSTANCE.northOnly) {
-                                drawString("E", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) Math.toRadians(limitedDeg)), mapSize - 3, CommonColors.WHITE);
-                                drawString("S", -2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) (Math.toRadians(limitedDeg) + (Math.PI / 2))), CommonColors.WHITE);
-                                drawString("W", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) (Math.toRadians(limitedDeg) + Math.PI)), -3, CommonColors.WHITE);
-                            }
-                        } else if (limitedDeg <= 225) {
-                            drawString("N", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) (Math.toRadians(limitedDeg) - (Math.PI / 2))), mapSize - 3, CommonColors.WHITE);
-                            if (!MapConfig.INSTANCE.northOnly) {
-                                drawString("E", -2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) Math.toRadians(limitedDeg)), CommonColors.WHITE);
-                                drawString("S", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) (Math.toRadians(limitedDeg) + (Math.PI / 2))), -3, CommonColors.WHITE);
-                                drawString("W", mapSize - 2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) (Math.toRadians(limitedDeg) + Math.PI)), CommonColors.WHITE);
-                            }
-                        } else {
-                            drawString("N", -2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) (Math.toRadians(limitedDeg) - (Math.PI / 2))), CommonColors.WHITE);
-                            if (!MapConfig.INSTANCE.northOnly) {
-                                drawString("E", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) Math.toRadians(limitedDeg)), -3, CommonColors.WHITE);
-                                drawString("S", mapSize - 2, mapCentre - 3 + mapCentreSquare * MathHelper.sin((float) (Math.toRadians(limitedDeg) + (Math.PI / 2))), CommonColors.WHITE);
-                                drawString("W", mapCentre - 2 + mapCentreSquare * MathHelper.cos((float) (Math.toRadians(limitedDeg) + Math.PI)), mapSize - 3, CommonColors.WHITE);
-                            }
-                        }
+                    float yawRadians = (float) Math.toRadians(mc.player.rotationYaw);
+                    float northDX = mapCentre * MathHelper.sin(yawRadians);
+                    float northDY = mapCentre * MathHelper.cos(yawRadians);
+                    if (MapConfig.INSTANCE.mapFormat == MapConfig.MapFormat.SQUARE) {
+                        // Scale by sec((offset from 90 degree angle)) to map to tangent from offset point
+                        float circleToSquareScale = MathHelper.cos((float) Math.toRadians((mc.player.rotationYaw % 360f + 405f) % 90f - 45f));
+                        northDX /= circleToSquareScale;
+                        northDY /= circleToSquareScale;
+                    }
+                    drawString("N", mapCentre - 2 + northDX, mapCentre - 3 + northDY, CommonColors.WHITE);
+                    if (!MapConfig.INSTANCE.northOnly) {
+                        drawString("E", mapCentre - 2 - northDY, mapCentre - 3 + northDX, CommonColors.WHITE);
+                        drawString("S", mapCentre - 2 - northDX, mapCentre - 3 - northDY, CommonColors.WHITE);
+                        drawString("W", mapCentre - 2 + northDY, mapCentre - 3 - northDX, CommonColors.WHITE);
                     }
                 } else {
                     float mapCentre = (float) mapSize / 2f;
@@ -320,13 +318,10 @@ public class MiniMapOverlay extends Overlay {
 
             if (MapConfig.INSTANCE.showCoords) {
                 drawString(
-                        String.join(", ", Long.toString(Math.round(mc.player.posX)), Long.toString(Math.round(mc.player.posY)), Long.toString(Math.round(mc.player.posZ))),
+                        String.join(", ", Integer.toString((int) mc.player.posX), Integer.toString((int) mc.player.posY), Integer.toString((int) mc.player.posZ)),
                         mapSize / 2f, mapSize + 6, CommonColors.WHITE, SmartFontRenderer.TextAlignment.MIDDLE, SmartFontRenderer.TextShadow.OUTLINE
                 );
             }
-
-            //GlStateManager.disableTexture2D();
-
         }catch (Exception ex) { ex.printStackTrace(); }
     }
 

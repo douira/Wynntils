@@ -10,14 +10,15 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.wynntils.Reference;
 import com.wynntils.webapi.WebManager;
-import org.apache.commons.io.Charsets;
 import org.apache.commons.io.IOUtils;
 
 import java.io.OutputStream;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -25,41 +26,49 @@ import java.util.concurrent.TimeUnit;
 
 public class CloudConfigurations {
 
-    ScheduledExecutorService service;
-    ScheduledFuture runningTask;
-    String token;
+    private ScheduledExecutorService service;
+    private ScheduledFuture runningTask;
+    private String token;
 
-    Gson gson = new Gson();
+    private Gson gson = new Gson();
 
     public CloudConfigurations(ScheduledExecutorService service, String token) {
         this.service = service; this.token = token;
     }
 
-    List<ConfigContainer> toUpload = Collections.synchronizedList(new ArrayList<>());
+    private final List<ConfigContainer> toUpload = new ArrayList<>();
 
     public void queueConfig(String fileName, String base64) {
-        toUpload.add(new ConfigContainer(fileName, base64));
+        synchronized (toUpload) {
+            toUpload.add(new ConfigContainer(fileName, base64));
 
-        startUploadQueue();
+            startUploadQueue();
+        }
     }
 
     private void startUploadQueue() {
-        if(runningTask != null && !runningTask.isDone() && !runningTask.isCancelled()) return;
+        if (runningTask != null && !runningTask.isDone() && !runningTask.isCancelled() || WebManager.getApiUrls() == null) return;
 
         runningTask = service.scheduleAtFixedRate(() -> {
-            if(toUpload.size() == 0) return;
+            List<ConfigContainer> uploading;
+            synchronized (toUpload) {
+                uploading = removeDuplicates(toUpload);
+                toUpload.clear();
+            }
+
+            if (uploading.isEmpty()) return;
 
             Reference.LOGGER.info("Uploading configurations...");
 
             JsonArray body = new JsonArray();
-            for(ConfigContainer container : toUpload) {
+            for (ConfigContainer container : uploading) {
                 body.add(gson.toJsonTree(container));
             }
 
-            try{
-                URLConnection st = new URL(WebManager.apiUrls.get("UserAccount") + "uploadConfig/" + token).openConnection();
+            try {
+                URLConnection st = new URL(WebManager.getApiUrls().get("UserAccount") + "uploadConfig/" + token).openConnection();
 
-                byte[] bodyBytes = body.toString().getBytes(Charsets.UTF_8);
+                byte[] bodyBytes = body.toString().getBytes(StandardCharsets.UTF_8);
                 st.setRequestProperty("User-Agent", "WynntilsClient/v" + Reference.VERSION + "/B" + Reference.BUILD_NUMBER);
                 st.setRequestProperty("Content-Length", "" + bodyBytes.length);
                 st.setRequestProperty("Content-Type", "application/json");
@@ -75,24 +84,46 @@ public class CloudConfigurations {
                     IOUtils.closeQuietly(outputStream);
                 }
 
-                JsonObject finalResult = new JsonParser().parse(IOUtils.toString(st.getInputStream())).getAsJsonObject();
-                if(finalResult.has("result")) {
+                JsonObject finalResult = new JsonParser().parse(IOUtils.toString(st.getInputStream(), StandardCharsets.UTF_8)).getAsJsonObject();
+                if (finalResult.has("result")) {
                     Reference.LOGGER.info("Configuration upload complete!");
-                }else{
+                } else {
                     Reference.LOGGER.info("Configuration upload failed!");
                 }
 
-                toUpload.clear();
-            }catch (Exception ex) { ex.printStackTrace(); }
+            } catch (Exception ex) {
+                ex.printStackTrace();
 
-        },0, 10, TimeUnit.SECONDS);
+                synchronized (toUpload) {
+                    toUpload.addAll(0, uploading);
+                }
+            }
+
+        }, 0, 10, TimeUnit.SECONDS);
     }
 
-    private class ConfigContainer {
+    private static List<ConfigContainer> removeDuplicates(List<ConfigContainer> toUpload) {
+        HashSet<String> seen = new HashSet<>(toUpload.size() * 2);
+
+        ArrayList<ConfigContainer> withoutDuplicates = new ArrayList<>(toUpload.size());
+
+        // Newer configs trump older configs so reverse iterate
+        for (int i = toUpload.size(); i-- > 0; ) {
+            ConfigContainer cc = toUpload.get(i);
+            if (seen.add(cc.fileName)) {
+                withoutDuplicates.add(cc);
+            }
+        }
+
+        Collections.reverse(withoutDuplicates);
+        return withoutDuplicates;
+    }
+
+    private static class ConfigContainer {
 
         String fileName, base64;
 
-        public ConfigContainer(String fileName, String base64) {
+        ConfigContainer(String fileName, String base64) {
             this.fileName = fileName; this.base64 = base64;
         }
 

@@ -6,7 +6,7 @@ package com.wynntils.modules.core.overlays.inventories;
 
 import com.wynntils.core.events.custom.GuiOverlapEvent;
 import com.wynntils.core.framework.FrameworkManager;
-import com.wynntils.modules.questbook.QuestBookModule;
+import com.wynntils.modules.questbook.enums.QuestBookPages;
 import net.minecraft.client.gui.GuiButton;
 import net.minecraft.client.gui.inventory.GuiInventory;
 import net.minecraft.entity.player.EntityPlayer;
@@ -15,6 +15,7 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemStack;
 
 import java.io.IOException;
+import java.util.List;
 
 public class InventoryReplacer extends GuiInventory {
 
@@ -39,7 +40,7 @@ public class InventoryReplacer extends GuiInventory {
 
     @Override
     public void handleMouseClick(Slot slotIn, int slotId, int mouseButton, ClickType type) {
-        if(!FrameworkManager.getEventBus().post(new GuiOverlapEvent.InventoryOverlap.HandleMouseClick(this, slotIn, slotId, mouseButton, type)))
+        if (!FrameworkManager.getEventBus().post(new GuiOverlapEvent.InventoryOverlap.HandleMouseClick(this, slotIn, slotId, mouseButton, type)))
             super.handleMouseClick(slotIn, slotId, mouseButton, type);
     }
 
@@ -52,22 +53,26 @@ public class InventoryReplacer extends GuiInventory {
 
     @Override
     public void keyTyped(char typedChar, int keyCode) throws IOException {
-        if(!FrameworkManager.getEventBus().post(new GuiOverlapEvent.InventoryOverlap.KeyTyped(this, typedChar, keyCode)))
+        if (!FrameworkManager.getEventBus().post(new GuiOverlapEvent.InventoryOverlap.KeyTyped(this, typedChar, keyCode)))
             super.keyTyped(typedChar, keyCode);
     }
 
     @Override
     public void actionPerformed(GuiButton guiButton) throws IOException {
         if (guiButton.id == 10) {
-            QuestBookModule.gui.open();
+            QuestBookPages.MAIN.getPage().open(true);
             return;
         }
-        
+
         super.actionPerformed(guiButton);
     }
 
     @Override
     public void renderToolTip(ItemStack stack, int x, int y) {
         super.renderToolTip(stack, x, y);
+    }
+
+    public List<GuiButton> getButtonList() {
+        return buttonList;
     }
 }

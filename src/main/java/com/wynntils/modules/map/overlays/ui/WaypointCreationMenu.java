@@ -5,13 +5,19 @@ import com.wynntils.core.framework.rendering.colors.CommonColors;
 import com.wynntils.core.framework.rendering.colors.CustomColor;
 import com.wynntils.core.framework.ui.UI;
 import com.wynntils.core.framework.ui.elements.UIEColorWheel;
-import com.wynntils.modules.map.instances.WaypointProfile;
-import com.wynntils.modules.map.instances.WaypointProfile.WaypointType;
+import com.wynntils.core.utils.StringUtils;
+import com.wynntils.core.utils.Utils;
 import com.wynntils.modules.map.MapModule;
 import com.wynntils.modules.map.configs.MapConfig;
+import com.wynntils.modules.map.instances.WaypointProfile;
+import com.wynntils.modules.map.instances.WaypointProfile.WaypointType;
 import com.wynntils.modules.map.overlays.objects.MapWaypointIcon;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.*;
+import net.minecraft.client.gui.GuiButton;
+import net.minecraft.client.gui.GuiLabel;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiTextField;
+import org.lwjgl.input.Keyboard;
 
 import java.io.IOException;
 
@@ -52,7 +58,6 @@ public class WaypointCreationMenu extends UI {
     }
 
     // Create a waypoint at a position other than the current player's position
-    // TODO: use this (Maybe double clicking somewhere on the main map would create a waypoint at that position?)
     public WaypointCreationMenu(GuiScreen previousGui, int initialX, int initialZ) {
         this.previousGui = previousGui;
 
@@ -67,7 +72,6 @@ public class WaypointCreationMenu extends UI {
     }
 
     @Override public void onInit() { }
-    @Override public void onClose() { }
     @Override public void onTick() { }
     @Override public void onWindowUpdate() {
         buttonList.clear();
@@ -82,36 +86,40 @@ public class WaypointCreationMenu extends UI {
         int visibilityButtonWidth = 100;
         int visibilityButtonHeight = this.height/2 + 40;
         buttonList.add(defaultVisibilityButton = new GuiButton(99, this.width/2 - 3 * visibilityButtonWidth / 2 - 2, visibilityButtonHeight, visibilityButtonWidth, 18, "Default"));
-        buttonList.add(alwaysVisibleButton = new GuiButton(100, this.width/2 - visibilityButtonWidth / 2,visibilityButtonHeight, visibilityButtonWidth, 18, "Always Visible"));
-        buttonList.add(hiddenButton = new GuiButton(101, this.width/2 + visibilityButtonWidth / 2 + 2,visibilityButtonHeight, visibilityButtonWidth, 18, "Hidden"));
+        buttonList.add(alwaysVisibleButton = new GuiButton(100, this.width/2 - visibilityButtonWidth / 2, visibilityButtonHeight, visibilityButtonWidth, 18, "Always Visible"));
+        buttonList.add(hiddenButton = new GuiButton(101, this.width/2 + visibilityButtonWidth / 2 + 2, visibilityButtonHeight, visibilityButtonWidth, 18, "Hidden"));
 
-        buttonList.add(cancelButton = new GuiButton(102, this.width/2 - 71, this.height - 80, 45, 18, "Cancel"));
-        buttonList.add(saveButton = new GuiButton(103, this.width/2 + 25, this.height - 80, 45, 18, "Save"));
+        int saveButtonHeight = this.height - 80 > visibilityButtonHeight + 20 ? this.height - 80 : this.height - 60;
+        buttonList.add(cancelButton = new GuiButton(102, this.width/2 - 71, saveButtonHeight, 45, 18, "Cancel"));
+        buttonList.add(saveButton = new GuiButton(103, this.width/2 + 25, saveButtonHeight, 45, 18, "Save"));
         saveButton.enabled = false;
 
         xCoordField.setText(Integer.toString(initialX));
         zCoordField.setText(Integer.toString(initialZ));
         yCoordField.setText(Integer.toString(Minecraft.getMinecraft().player.getPosition().getY()));
 
-        nameFieldLabel = new GuiLabel(mc.fontRenderer,0,this.width/2 - 80,this.height/2 - 81,40,10,0xFFFFFF);
+        nameFieldLabel = new GuiLabel(mc.fontRenderer, 0, this.width/2 - 80, this.height/2 - 81, 40, 10, 0xFFFFFF);
         nameFieldLabel.addLine("Waypoint Name:");
-        xCoordFieldLabel = new GuiLabel(mc.fontRenderer,1,this.width/2 - 75,this.height/2 - 24,40,10,0xFFFFFF);
+        xCoordFieldLabel = new GuiLabel(mc.fontRenderer, 1, this.width/2 - 75, this.height/2 - 24, 40, 10, 0xFFFFFF);
         xCoordFieldLabel.addLine("X");
-        yCoordFieldLabel = new GuiLabel(mc.fontRenderer,2,this.width/2 + 45,this.height/2 - 24,40,10,0xFFFFFF);
+        yCoordFieldLabel = new GuiLabel(mc.fontRenderer, 2, this.width/2 + 45, this.height/2 - 24, 40, 10, 0xFFFFFF);
         yCoordFieldLabel.addLine("Y");
-        zCoordFieldLabel = new GuiLabel(mc.fontRenderer,3,this.width/2 - 15,this.height/2 - 24,40,10,0xFFFFFF);
+        zCoordFieldLabel = new GuiLabel(mc.fontRenderer, 3, this.width/2 - 15, this.height/2 - 24, 40, 10, 0xFFFFFF);
         zCoordFieldLabel.addLine("Z");
-        coordinatesLabel = new GuiLabel(mc.fontRenderer,3,this.width/2 - 80,this.height/2 - 41,40,10,0xFFFFFF);
+        coordinatesLabel = new GuiLabel(mc.fontRenderer, 3, this.width/2 - 80, this.height/2 - 41, 40, 10, 0xFFFFFF);
         coordinatesLabel.addLine("Coordinates:");
 
         boolean returning = state != null;  // true if reusing gui (i.e., returning from another gui)
 
         if (!returning) {
-            UIElements.add(colorWheel = new UIEColorWheel(0, 0, this.width / 2, this.height / 2 + 9, 20, 20, true, this::setColor, this));
+            UIElements.add(colorWheel = new UIEColorWheel(0.5f, 0.5f, 0, 9, 20, 20, true, this::setColor, this));
         }
 
         WaypointProfile wp = returning ? wpIcon.getWaypointProfile() : this.wp;
         CustomColor color = wp == null ? CommonColors.WHITE : wp.getColor();
+        if (color == null) {
+            color = CommonColors.WHITE;
+        }
 
         if (wp == null) {
             setWpIcon(WaypointType.FLAG, 0, color);
@@ -129,9 +137,17 @@ public class WaypointCreationMenu extends UI {
         } else {
             state = new WaypointCreationMenuState();
             state.putState(this);
+            colorWheel.setColor(color);
         }
 
         isAllValidInformation();
+
+        Keyboard.enableRepeatEvents(true);
+    }
+
+    @Override
+    public void onClose() {
+        Keyboard.enableRepeatEvents(false);
     }
 
     private void setWpIcon(WaypointType type, int zoomNeeded, CustomColor colour) {
@@ -173,11 +189,12 @@ public class WaypointCreationMenu extends UI {
     }
 
     private CustomColor getColor() {
-        return wpIcon.getWaypointProfile().getColor();
+        CustomColor c = wpIcon.getWaypointProfile().getColor();
+        return c == null ? CommonColors.WHITE : c;
     }
 
     private void setColor(CustomColor color) {
-        setWpIcon(getWaypointType(), getZoomNeeded(), color);
+        setWpIcon(getWaypointType(), getZoomNeeded(), color == null ? CommonColors.WHITE : color);
     }
 
     @Override public void onRenderPreUIE(ScreenRenderer renderer) {}
@@ -202,13 +219,13 @@ public class WaypointCreationMenu extends UI {
         zCoordFieldLabel.drawLabel(mc, mouseX, mouseY);
         coordinatesLabel.drawLabel(mc, mouseX, mouseY);
 
-        fontRenderer.drawString("Icon:", this.width/2 - 80,this.height/2,0xFFFFFF, true);
-        fontRenderer.drawString("Colour:", this.width/2,this.height/2,0xFFFFFF, true);
+        fontRenderer.drawString("Icon:", this.width/2 - 80, this.height/2, 0xFFFFFF, true);
+        fontRenderer.drawString("Colour:", this.width/2, this.height/2, 0xFFFFFF, true);
 
         float centreX = this.width / 2f - 60 + 9;
         float centreZ = this.height / 2f + 10 + 9;
         float multiplier = 9f / Math.max(wpIcon.getSizeX(), wpIcon.getSizeZ());
-        wpIcon.renderAt(renderer, centreX, centreZ, multiplier);
+        wpIcon.renderAt(renderer, centreX, centreZ, multiplier, 1);
     }
 
     @Override
@@ -225,10 +242,14 @@ public class WaypointCreationMenu extends UI {
 
     @Override
     protected void keyTyped(char typedChar, int keyCode) throws IOException {
+        if (keyCode == Keyboard.KEY_TAB) {
+            Utils.tab(nameField, xCoordField, zCoordField, yCoordField, colorWheel.textBox.textField);
+            return;
+        }
         super.keyTyped(typedChar, keyCode);
         nameField.textboxKeyTyped(typedChar, keyCode);
         xCoordField.textboxKeyTyped(typedChar, keyCode);
-        yCoordField.textboxKeyTyped(typedChar,keyCode);
+        yCoordField.textboxKeyTyped(typedChar, keyCode);
         zCoordField.textboxKeyTyped(typedChar, keyCode);
         isAllValidInformation();
     }
@@ -238,18 +259,20 @@ public class WaypointCreationMenu extends UI {
         if (button == saveButton) {
             WaypointProfile newWp = new WaypointProfile(
                     nameField.getText().trim(),
-                    Integer.valueOf(xCoordField.getText().trim()), Integer.valueOf(yCoordField.getText().trim()), Integer.valueOf(zCoordField.getText().trim()),
+                    Integer.parseInt(xCoordField.getText().trim()), Integer.parseInt(yCoordField.getText().trim()), Integer.parseInt(zCoordField.getText().trim()),
                     getColor(), getWaypointType(), getZoomNeeded()
             );
             if (isUpdatingExisting) {
+                newWp.setGroup(wp.getGroup());
                 MapConfig.Waypoints.INSTANCE.waypoints.set(MapConfig.Waypoints.INSTANCE.waypoints.indexOf(wp), newWp);
             } else {
+                newWp.setGroup(newWp.getType());
                 MapConfig.Waypoints.INSTANCE.waypoints.add(newWp);
             }
             MapConfig.Waypoints.INSTANCE.saveSettings(MapModule.getModule());
-            Minecraft.getMinecraft().displayGuiScreen(previousGui == null ? new WorldMapUI() : previousGui);
+            Utils.displayGuiScreen(previousGui == null ? new MainWorldMapUI() : previousGui);
         } else if (button == cancelButton) {
-            Minecraft.getMinecraft().displayGuiScreen(previousGui == null ? new WorldMapUI() : previousGui);
+            Utils.displayGuiScreen(previousGui == null ? new MainWorldMapUI() : previousGui);
         } else if (button == waypointTypeNext) {
             setWaypointType(WaypointType.values()[(getWaypointType().ordinal() + 1) % WaypointType.values().length]);
         } else if (button == waypointTypeBack) {
@@ -264,17 +287,16 @@ public class WaypointCreationMenu extends UI {
     }
 
     private void isAllValidInformation() {
-        if (!xCoordField.getText().trim().matches("(-?(?!0)\\d+)|0")) { xCoordField.setTextColor(0xFF6666); } else { xCoordField.setTextColor(0xFFFFFF); }
-        if (!yCoordField.getText().trim().matches("(-?(?!0)\\d+)|0")) { yCoordField.setTextColor(0xFF6666); } else { yCoordField.setTextColor(0xFFFFFF); }
-        if (!zCoordField.getText().trim().matches("(-?(?!0)\\d+)|0")) { zCoordField.setTextColor(0xFF6666); } else { zCoordField.setTextColor(0xFFFFFF); }
-        if (xCoordField.getText().trim().matches("(-?(?!0)\\d+)|0") && yCoordField.getText().trim().matches("(-?(?!0)\\d+)|0") && zCoordField.getText().trim().matches("(-?(?!0)\\d+)|0") && !nameField.getText().isEmpty() && getWaypointType() != null){
-            saveButton.enabled = true;
-        } else {
-            saveButton.enabled = false;
-        }
+        boolean xValid = StringUtils.isValidInteger(xCoordField.getText().trim());
+        boolean yValid = StringUtils.isValidInteger(yCoordField.getText().trim());
+        boolean zValid = StringUtils.isValidInteger(zCoordField.getText().trim());
+        xCoordField.setTextColor(xValid ? 0xFFFFFF : 0xFF6666);
+        yCoordField.setTextColor(yValid ? 0xFFFFFF : 0xFF6666);
+        zCoordField.setTextColor(zValid ? 0xFFFFFF : 0xFF6666);
+        saveButton.enabled = xValid && yValid && zValid && !nameField.getText().isEmpty() && getWaypointType() != null;
     }
 
-    private class WaypointCreationMenuState {
+    private static class WaypointCreationMenuState {
         String nameField;
         String xCoordField;
         String yCoordField;

@@ -12,6 +12,7 @@ import net.minecraft.util.ResourceLocation;
 import org.apache.commons.io.IOUtils;
 
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,18 +21,18 @@ public class Mappings {
     public static void loadMappings() {
         List<Class<?>> mappingClasses = new ArrayList<>();
 
-        //mapping class to be registered
+        // mapping class to be registered
         mappingClasses.add(Mappings.Map.class);
 
-        for(Class<?> clazz : mappingClasses) {
+        for (Class<?> clazz : mappingClasses) {
             String mainPath = Reference.MOD_ID + ":textures/" + clazz.getName().split("\\$")[1].toLowerCase() + "/data/";
 
-            for(Field f : clazz.getDeclaredFields()) {
+            for (Field f : clazz.getDeclaredFields()) {
                 try{
-                    if(f.get(null) != null || !f.getType().isAssignableFrom(JsonObject.class)) continue;
+                    if (f.get(null) != null || !f.getType().isAssignableFrom(JsonObject.class)) continue;
 
                     ResourceLocation rc = new ResourceLocation(mainPath + f.getName() + ".json");
-                    f.set(null, new JsonParser().parse(IOUtils.toString(Minecraft.getMinecraft().getResourceManager().getResource(rc).getInputStream())));
+                    f.set(null, new JsonParser().parse(IOUtils.toString(Minecraft.getMinecraft().getResourceManager().getResource(rc).getInputStream(), StandardCharsets.UTF_8)));
 
                 }catch (Exception ex) {
                     ex.printStackTrace();

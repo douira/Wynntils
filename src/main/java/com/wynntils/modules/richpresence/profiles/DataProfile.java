@@ -4,16 +4,16 @@
 
 package com.wynntils.modules.richpresence.profiles;
 
+import com.wynntils.ModCore;
 import com.wynntils.core.events.custom.WynnTerritoryChangeEvent;
 import com.wynntils.core.framework.FrameworkManager;
-import net.minecraftforge.common.MinecraftForge;
 
 public class DataProfile {
 
     String location = "Waiting";
     boolean unknownLocation = false;
 
-    public DataProfile(){
+    public DataProfile() {
     }
 
     public String getLocation() {
@@ -25,7 +25,9 @@ public class DataProfile {
     }
 
     public void setLocation(String value) {
-        FrameworkManager.getEventBus().post(new WynnTerritoryChangeEvent(location, value));
+        ModCore.mc().addScheduledTask(() -> {
+            FrameworkManager.getEventBus().post(new WynnTerritoryChangeEvent(location, value));
+        });
         location = value;
     }
 

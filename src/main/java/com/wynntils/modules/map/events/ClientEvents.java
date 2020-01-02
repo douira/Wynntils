@@ -7,7 +7,7 @@ package com.wynntils.modules.map.events;
 import com.wynntils.core.events.custom.GuiOverlapEvent;
 import com.wynntils.core.framework.interfaces.Listener;
 import com.wynntils.core.framework.rendering.colors.CommonColors;
-import com.wynntils.core.utils.Location;
+import com.wynntils.core.utils.objects.Location;
 import com.wynntils.modules.core.managers.CompassManager;
 import com.wynntils.modules.map.MapModule;
 import com.wynntils.modules.map.configs.MapConfig;
@@ -26,24 +26,24 @@ public class ClientEvents implements Listener {
 
     @SubscribeEvent
     public void renderBeacon(RenderWorldLastEvent e) {
-        if(!MapConfig.INSTANCE.showCompassBeam || CompassManager.getCompassLocation() == null) return;
+        if (!MapConfig.INSTANCE.showCompassBeam || CompassManager.getCompassLocation() == null) return;
 
         Location compass = CompassManager.getCompassLocation();
-        BeaconManager.drawBeam(new Location(compass.getX(), compass.getY(), compass.getZ()), CommonColors.RED);
+        BeaconManager.drawBeam(new Location(compass.getX(), compass.getY(), compass.getZ()), MapConfig.INSTANCE.compassBeaconColor);
     }
 
     @SubscribeEvent
     public void openChest(PlayerInteractEvent.RightClickBlock e) {
-        if(e.getPos() == null) return;
+        if (e.getPos() == null) return;
         lastLocation = new Location(e.getPos().getX(), e.getPos().getY(), e.getPos().getZ());
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public void guiOpen(GuiOverlapEvent.ChestOverlap.InitGui e) {
-        if(lastLocation == null) return;
+        if (lastLocation == null) return;
 
-        if(e.getGuiInventory().getLowerInv().getName().contains("Loot Chest ")) {
-            String tier = e.getGuiInventory().getLowerInv().getName().replace("Loot Chest ", "");
+        if (e.getGui().getLowerInv().getName().contains("Loot Chest ")) {
+            String tier = e.getGui().getLowerInv().getName().replace("Loot Chest ", "");
             if (!MapConfig.Waypoints.INSTANCE.chestTiers.isTierAboveThis(tier)) return;
 
             WaypointProfile wp = null;
@@ -61,9 +61,10 @@ public class ClientEvents implements Listener {
                     wp = new WaypointProfile("Loot Chest T1", lastLocation.getX(), lastLocation.getY(), lastLocation.getZ(), CommonColors.WHITE, WaypointProfile.WaypointType.LOOTCHEST_T1, -1000);
                     break;
             }
-            if(wp != null) {
-                if(MapConfig.Waypoints.INSTANCE.waypoints.stream().anyMatch(c -> c.getX() == lastLocation.getX() && c.getY() == lastLocation.getY() && c.getZ() == lastLocation.getZ())) return;
+            if (wp != null) {
+                if (MapConfig.Waypoints.INSTANCE.waypoints.stream().anyMatch(c -> c.getX() == lastLocation.getX() && c.getY() == lastLocation.getY() && c.getZ() == lastLocation.getZ())) return;
 
+                wp.setGroup(WaypointProfile.WaypointType.LOOTCHEST_T4);
                 MapConfig.Waypoints.INSTANCE.waypoints.add(wp);
                 MapConfig.Waypoints.INSTANCE.saveSettings(MapModule.getModule());
 

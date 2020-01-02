@@ -10,10 +10,10 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.wynntils.ModCore;
 import com.wynntils.Reference;
+import com.wynntils.core.utils.helpers.MD5Verification;
 import com.wynntils.webapi.WebManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.CryptManager;
-import org.apache.commons.io.Charsets;
 import org.apache.commons.io.IOUtils;
 
 import javax.crypto.SecretKey;
@@ -22,6 +22,7 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.security.PublicKey;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +37,7 @@ public class WynntilsAccount {
     boolean ready = false;
 
     HashMap<String, String> encondedConfigs = new HashMap<>();
+    HashMap<String, String> md5Verifications = new HashMap<>();
     CloudConfigurations configurationUploader;
 
     public WynntilsAccount() { }
@@ -49,19 +51,19 @@ public class WynntilsAccount {
     }
 
     public void updateDiscord(String id, String username) {
-        if(!ready) return;
+        if (!ready || WebManager.getApiUrls() == null) return;
 
         service.submit(() -> {
             try {
-                URLConnection st = new URL(WebManager.apiUrls.get("UserAccount") + "updateDiscord/" + token).openConnection();
+                URLConnection st = new URL(WebManager.getApiUrls().get("UserAccount") + "updateDiscord/" + token).openConnection();
 
-                //HeyZeer0: Request below
+                // HeyZeer0: Request below
                 JsonObject body = new JsonObject();
                 body.addProperty("id", id);
                 body.addProperty("username", username);
                 // {"id":"<user-id>", "username":"<username>"}
 
-                byte[] bodyBytes = body.toString().getBytes(Charsets.UTF_8);
+                byte[] bodyBytes = body.toString().getBytes(StandardCharsets.UTF_8);
 
                 st.setRequestProperty("User-Agent", "WynntilsClient/v" + Reference.VERSION + "/B" + Reference.BUILD_NUMBER);
                 st.setRequestProperty("Content-Length", "" + bodyBytes.length);
@@ -85,19 +87,23 @@ public class WynntilsAccount {
     }
 
     public void uploadConfig(String fileName, String base64) {
-        if(!ready || configurationUploader == null) return;
+        if (!ready || configurationUploader == null) return;
 
         configurationUploader.queueConfig(fileName, base64);
     }
 
-    boolean secondAttempt = false;
+    int connectionAttempts = 0;
 
     public void login() {
+        if (WebManager.getApiUrls() == null || connectionAttempts >= 4) return;
+
+        connectionAttempts++;
+
         try {
-            URLConnection st = new URL(WebManager.apiUrls.get("UserAccount") + "/requestEncryption").openConnection();
+            URLConnection st = new URL(WebManager.getApiUrls().get("UserAccount") + "/requestEncryption").openConnection();
             st.setRequestProperty("User-Agent", "WynntilsClient/v" + Reference.VERSION + "/B" + Reference.BUILD_NUMBER);
 
-            JsonObject result = new JsonParser().parse(IOUtils.toString(st.getInputStream())).getAsJsonObject();
+            JsonObject result = new JsonParser().parse(IOUtils.toString(st.getInputStream(), StandardCharsets.UTF_8)).getAsJsonObject();
 
             byte[] publicKeyBy = DatatypeConverter.parseHexBinary(result.get("publicKeyIn").getAsString());
 
@@ -112,14 +118,14 @@ public class WynntilsAccount {
             byte[] secretKeyEncrypted = CryptManager.encryptData(publicKey, secretkey.getEncoded());
             String lastKey = DatatypeConverter.printHexBinary(secretKeyEncrypted);
 
-            URLConnection st2 = new URL(WebManager.apiUrls.get("UserAccount") + "/responseEncryption/").openConnection();
+            URLConnection st2 = new URL(WebManager.getApiUrls().get("UserAccount") + "/responseEncryption/").openConnection();
 
             JsonObject object = new JsonObject();
             object.addProperty("username", mc.getSession().getUsername());
             object.addProperty("key", lastKey);
             object.addProperty("version", Reference.VERSION + (Reference.BUILD_NUMBER != -1 ? "_" + Reference.BUILD_NUMBER : ""));
 
-            byte[] postAsBytes = object.toString().getBytes(Charsets.UTF_8);
+            byte[] postAsBytes = object.toString().getBytes(StandardCharsets.UTF_8);
 
             st2.setRequestProperty("User-Agent", "WynntilsClient/v" + Reference.VERSION + "/B" + Reference.BUILD_NUMBER);
             st2.setRequestProperty("Content-Length", "" + postAsBytes.length);
@@ -134,40 +140,43 @@ public class WynntilsAccount {
                 IOUtils.closeQuietly(outputStream);
             }
 
-            JsonObject finalResult = new JsonParser().parse(IOUtils.toString(st2.getInputStream())).getAsJsonObject();
-            if (finalResult.has("error")) {
+            JsonObject finalResult = new JsonParser().parse(IOUtils.toString(st2.getInputStream(), StandardCharsets.UTF_8)).getAsJsonObject();
+
+            if (finalResult.has("error") || !finalResult.has("result")) {
+                Reference.LOGGER.error("Failed to connect to Wynntils Accounts trying again!");
+
+                login();
                 return;
             }
 
-            if (finalResult.has("result")) {
-                token = finalResult.get("authtoken").getAsString();
-                ready = true;
+            token = finalResult.get("authtoken").getAsString();
+            ready = true;
 
-                configurationUploader = new CloudConfigurations(service, token);
+            JsonObject hashes = finalResult.getAsJsonObject("hashes");
+            hashes.entrySet().forEach((k) -> md5Verifications.put(k.getKey(), k.getValue().getAsString()));
 
-                Reference.LOGGER.info("Succesfully connected to accounts!");
+            configurationUploader = new CloudConfigurations(service, token);
 
-                JsonObject obj = finalResult.get("configFiles").getAsJsonObject();
-                if (obj.entrySet().size() <= 0) return;
+            Reference.LOGGER.info("Succesfully connected to accounts!");
 
-                for (Map.Entry<String, JsonElement> objs : obj.entrySet()) {
-                    encondedConfigs.put(objs.getKey(), objs.getValue().getAsString());
-                }
-                return;
+            JsonObject obj = finalResult.get("configFiles").getAsJsonObject();
+            if (obj.entrySet().size() <= 0) return;
+
+            for (Map.Entry<String, JsonElement> objs : obj.entrySet()) {
+                encondedConfigs.put(objs.getKey(), objs.getValue().getAsString());
             }
 
         }catch (Exception ex) {
             ex.printStackTrace();
-        }
 
-        //HeyZeer0: Tries to make a second attempt connection
-        if(!secondAttempt) {
-            secondAttempt = true;
-
+            Reference.LOGGER.error("Failed to connect to Wynntils Accounts trying again!");
             login();
         }
+    }
 
-        Reference.LOGGER.error("Failed to connect to Wynntils Accounts!");
+    public String getMD5Verification(String key) {
+        String digest = md5Verifications.getOrDefault(key, null);
+        return MD5Verification.isMd5Digest(digest) ? digest : null;
     }
 
 }
